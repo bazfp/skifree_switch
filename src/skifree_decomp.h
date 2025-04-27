@@ -80,6 +80,7 @@ Actor* updateActorVelMaybe(Actor* actor, const ActorVelStruct* param_2);
 PermObject* addPermObject(PermObjectList* objList, PermObject* permObject);
 void setupPermObjects(void);
 void handleKeydownMessage(SDL_Event* e);
+void handleJoyStickMessage(SDL_Event* e);
 void updateGameState(void);
 BOOL createBitmapSheets(HDC param_1);
 void drawWindow(HDC hdc, RECT* rect);

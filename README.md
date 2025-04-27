@@ -1,12 +1,46 @@
-Skifree SDL
-=============================
+Skifree SDL for Nintendo Switch!
+=================================
 
-A source port of the classic [Microsoft Entertainment Pack](https://en.wikipedia.org/wiki/Microsoft_Entertainment_Pack) game "skifree" to cross platform SDL2.
+I always thought Nintendo Switch was missing this Windows 3.0 classic.
+
+Has simple joystick controls and jump (A!).
+
+You will get eaten.
+
+A source port of the classic [Microsoft Entertainment Pack](https://en.wikipedia.org/wiki/Microsoft_Entertainment_Pack) game "skifree" to cross platform SDL2 and now running on the switch!
+
+Introduced a Makefile for compiling with `DevKitPro` docker image for Nintendo Switch.
+
+Forked again from the Skifree SDL by jeff-1amstudios 
 
 Forked from the decompiled skifree [skifree_decomp](https://github.com/yuv422/skifree_decomp) by Eric Fry
 
 ![Untitled](https://github.com/jeff-1amstudios/skifree_sdl/assets/1063652/95b53385-4d16-4de5-8f9d-10a877fee6a9)
 
+## Compiling for Nintendo Switch
+
+Use the `DevKitPro` docker image https://hub.docker.com/r/devkitpro/devkita64
+
+```sh
+docker pull devkitpro/devkita64
+# Set your local cd somewhere sensible as we're gonna bindmount it
+
+docker run --mount type=bind,src=.,dst=/home/switchdev-it -it devkitpro/devkita64 bash
+cd /home/switchdev-it
+git clone https://github.com/bazfp/skifree_switch
+cd skifree_switch
+
+# grab resources
+curl -Lo /tmp/ski32_resources.zip https://archive.org/download/ski32_resources/ski32_resources.zip
+unzip -d resources /tmp/ski32_resources.zip
+
+# Generate resources header
+cmake -DSOURCE_DIR=/home/switchdev-it/skifree_sdl -DRESOURCES_GLOB=resources/* -P /home/switchdev-it/skifree_switch/cmake/EmbedResources.cmake
+mv embedded_resources.h src/
+
+# Just build it!
+make
+```
 
 ## Dependencies
 ### Resources
@@ -25,27 +59,5 @@ unzip -d resources /tmp/ski32_resources.zip
 - SDL2_image
 - SDL2_ttf
 
-## Compiling
-
-This is a cmake project.
-
-```sh
-git clone https://github.com/jeff-1amstudios/skifree_sdl
-cd skifree_sdl
-# grab resources
-curl -Lo /tmp/ski32_resources.zip https://archive.org/download/ski32_resources/ski32_resources.zip
-unzip -d resources /tmp/ski32_resources.zip
-
-mkdir build
-cd build
-cmake ..
-```
-
-## MacOS
-On MacOS we build an app bundle `skifree_sdl.app`. Use right-click > Open the first time to get around [unverified developer warnings](https://support.apple.com/en-nz/guide/mac-help/mh40616/mac).
-
-![Screenshot 2023-11-06 at 2 07 45 pm](https://github.com/jeff-1amstudios/skifree_sdl/assets/1063652/4edce399-ddeb-499a-a554-aebb7a70dfad)
-
 ## Todo
-- Mouse support
 - Sound maybe(?) - https://foone.wordpress.com/2017/06/20/uncovering-the-sounds-of-skifree/

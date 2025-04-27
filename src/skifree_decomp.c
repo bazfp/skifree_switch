@@ -11,6 +11,57 @@
 #include <SDL_image.h>
 #include <stdio.h>
 
+#include <switch.h>
+
+//-----------------------------------------------------------------------------
+// nxlink support
+//-----------------------------------------------------------------------------
+#define ENABLE_NXLINK
+#ifndef ENABLE_NXLINK
+#define TRACE(fmt,...) ((void)0)
+#else
+#include <unistd.h>
+#define TRACE(fmt,...) printf("%s: " fmt "\n", __PRETTY_FUNCTION__, ## __VA_ARGS__)
+
+static int s_nxlinkSock = -1;
+
+int xPosition = 0;
+int prevXPosition = 0;
+
+static void initNxLink()
+{
+    if (R_FAILED(socketInitializeDefault()))
+        return;
+
+    s_nxlinkSock = nxlinkStdio();
+    if (s_nxlinkSock >= 0)
+        TRACE("printf output now goes to nxlink server");
+    else
+        socketExit();
+}
+
+static void deinitNxLink()
+{
+    if (s_nxlinkSock >= 0)
+    {
+        close(s_nxlinkSock);
+        socketExit();
+        s_nxlinkSock = -1;
+    }
+}
+
+extern void userAppInit()
+{
+    initNxLink();
+}
+
+extern void userAppExit()
+{
+    deinitNxLink();
+}
+
+#endif
+
 #define ski_assert(exp, line) (void)((exp) || (assertFailed(sourceFilename, line), 0)) // TODO remove need for src param.
 
 // int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
@@ -20,7 +71,7 @@ int main(int argc, char* argv[]) {
     // MSG msg;
     SDL_Event event;
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_JOYSTICK) < 0) {
         printf("failed to init\n");
         return 1;
     }
@@ -74,6 +125,10 @@ int main(int argc, char* argv[]) {
                 break;
             case SDL_KEYDOWN:
                 handleKeydownMessage(&event);
+                break;
+            case SDL_JOYAXISMOTION:
+            case SDL_JOYBUTTONDOWN:
+                handleJoyStickMessage(&event);
                 break;
             }
         }
@@ -412,7 +467,7 @@ int initWindows() {
     int nWidth;
 
     SCREEN_WIDTH = 1280;
-    SCREEN_HEIGHT = 1024;
+    SCREEN_HEIGHT = 720;
 
     isPaused = 0;
     // isMinimised = 1;
@@ -475,6 +530,15 @@ int initWindows() {
     }
 
     SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, 0xFF);
+
+    // Open Switch Joysticks
+    for (int i = 0; i < 2; i++) {
+        if (SDL_JoystickOpen(i) == NULL) {
+            SDL_Log("SDL_JoystickOpen: %s\n", SDL_GetError());
+            SDL_Quit();
+            return -1;
+        }
+    }
 
     calculateStatusWindowDimensions(hSkiStatusWnd);
     statusWindowTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, statusWindowTotalTextWidth, statusWindowHeight);
@@ -3258,6 +3322,238 @@ void setupPermObjects() {
     permObject.actorTypeMaybe = ACTOR_TYPE_6_YETI_BOTTOM;
     permObject.maybeY = 32060;
     addPermObject(&PermObjectList_0040c720, &permObject);
+}
+
+void handleJoyStickMessage(SDL_Event* e) {
+    short sVar1;
+    uint32_t actorframeNo;
+
+    
+    SDL_Keycode press = 9999;
+    printf("Joy Button %i\n", e->jbutton.button);
+    SDL_Keycode pressBtn = 9999;
+    if (e->jbutton.button == 10)
+        pressBtn = SDLK_F2;
+    if (e->type == SDL_JOYBUTTONDOWN && e->jbutton.button == 0)
+        press = SDLK_INSERT;
+    if (e->type == SDL_JOYBUTTONDOWN && e->jbutton.button == 2)
+        press = SDLK_f;
+
+    switch (pressBtn) {
+    case SDLK_ESCAPE:
+        // ShowWindow(hSkiMainWnd, 6 /*SW_MINIMIZE*/);
+        SDL_MinimizeWindow(hSkiMainWnd);
+        return;
+    case SDLK_F3:
+        togglePausedState(); // TODO this is a jmp rather than a call in the original
+        return;
+    case SDLK_RETURN:
+        if (playerActor != (Actor*)0x0) {
+            return;
+        }
+        handleGameReset(); // TODO this is a jmp rather than a call in the original
+        return;
+    case SDLK_F2:
+        handleGameReset(); // TODO this is a jmp rather than a call in the original
+        return;
+    default:
+        break;
+    }
+
+    if (playerActor == NULL) {
+        return;
+    }
+    actorframeNo = playerActor->frameNo;
+    sVar1 = playerActor->isInAir;
+    if ((actorframeNo != 0xb) && (actorframeNo != 0x11)) {
+
+        prevXPosition = xPosition;
+
+        printf("Joy Axis %i", e->jaxis.axis);
+        printf("Joy Value %i", e->jaxis.value);
+        if (e->jaxis.axis == 0)
+        {
+            if (e->jaxis.value > 8000)
+            {
+                xPosition = xPosition + (e->jaxis.value / 8000);
+                if(prevXPosition < 50 && xPosition >= 50)
+                {
+                    press = SDLK_RIGHT;
+                    xPosition = 0;
+                }
+            }
+            else if(e->jaxis.value < -8000)
+            {
+                xPosition += (e->jaxis.value / 8000);
+                if(prevXPosition > -50 && xPosition <= -50)
+                {
+                    press = SDLK_LEFT;
+                    xPosition = 0;
+                }
+            }
+        }
+        else if (e->jaxis.axis == 1)
+        {
+            if (e->jaxis.value > 25000)
+                press = SDLK_DOWN;
+            if(e->jaxis.value < -25000)
+                press = SDLK_UP;
+        }
+        printf("XPos %i", xPosition);
+        printf("Press %i", press);
+        printf("\n");
+
+
+        switch (press) {
+        case SDLK_LEFT:
+            /* numpad 4
+               left */
+            ski_assert(actorframeNo < 0x16, 0xf63);
+
+            actorframeNo = playerTurnFrameNoTbl[actorframeNo].leftFrameNo;
+            if (actorframeNo == 7) {
+                //                    iVar2 = (int)playerActor->HorizontalVelMaybe - 8;
+                //                    if (iVar2 <= -8) {
+                //                        iVar2 = -8;
+                //                    }
+                //                    playerActor->HorizontalVelMaybe = (short) iVar2;
+                playerActor->HorizontalVelMaybe = max_(playerActor->HorizontalVelMaybe - 8, -8);
+            }
+            break;
+
+        case SDLK_RIGHT:
+            /* numpad 6, Right */
+            ski_assert(actorframeNo < 0x16, 3947);
+
+            actorframeNo = playerTurnFrameNoTbl[actorframeNo].rightFrameNo;
+            if (actorframeNo == 8) {
+                //                    iVar2 = (int) playerActor->HorizontalVelMaybe + 8;
+                //                    if (iVar2 >= 8) {
+                //                        iVar2 = 8;
+                //                    }
+                //                    playerActor->HorizontalVelMaybe = (short) iVar2;
+
+                playerActor->HorizontalVelMaybe = min_(playerActor->HorizontalVelMaybe + 8, 8);
+            }
+            break;
+
+        case SDLK_DOWN:
+            if (sVar1 == 0) {
+                actorframeNo = 0;
+                break;
+            }
+            switch (actorframeNo) {
+            case 0xd:
+                actorframeNo = 0x13;
+                break;
+            case 0x14:
+                actorframeNo = 0xe;
+                break;
+            case 0x15:
+                actorframeNo = 0xf;
+                break;
+            case 0x12:
+                actorframeNo = 0xd;
+                break;
+            case 0x13:
+                actorframeNo = 0x12;
+                break;
+            }
+            break;
+
+        case SDLK_UP:
+            switch (actorframeNo) {
+            case 0xd:
+                //                switchD_0040628c_caseD_13:
+                actorframeNo = 0x12;
+                break;
+            case 0x13:
+                //                switchD_0040628c_caseD_12:
+                actorframeNo = 0xd;
+                break;
+            case 0xe:
+                actorframeNo = 0x14;
+                break;
+            case 0xf:
+                actorframeNo = 0x15;
+                break;
+            case 3:
+            case 7:
+            case 0xc:
+                if (playerActor->verticalVelocityMaybe == 0) {
+                    actorframeNo = 9;
+                    playerActor->verticalVelocityMaybe = -4;
+                }
+                break;
+            case 6:
+            case 8:
+                if (playerActor->verticalVelocityMaybe == 0) {
+                    actorframeNo = 10;
+                    playerActor->verticalVelocityMaybe = -4;
+                }
+                break;
+            case 0x12:
+                //                switchD_0040628c_caseD_d:
+                actorframeNo = 0x13;
+                break;
+            }
+            break;
+
+        case SDLK_KP_7:
+            if (sVar1 == 0) {
+                actorframeNo = 3;
+            }
+            break;
+
+        case 0x21:
+        case 0x69:
+        case SDLK_KP_9:
+            /* numpad 9
+               Up right */
+            if (sVar1 == 0) {
+                actorframeNo = 6;
+            }
+            break;
+
+        case 0x23:
+        case 0x61:
+            /* numpad 1
+               down left */
+            if (sVar1 == 0) {
+                actorframeNo = 1;
+            }
+            break;
+
+        case 0x22:
+        case 99:
+            /* numpad 3
+               down right */
+            if (sVar1 == 0) {
+                actorframeNo = 4;
+            }
+            break;
+
+        case 0x2d:
+        case 0x60:
+        case SDLK_INSERT:
+            /* numpad 0, Insert
+               Jump. */
+            if (sVar1 == 0) {
+                playerActor->inAirCounter = 2;
+                actorframeNo = 0xd;
+                if (4 < playerActor->verticalVelocityMaybe) {
+                    playerActor->verticalVelocityMaybe = playerActor->verticalVelocityMaybe + -4;
+                }
+            }
+        case SDLK_f:
+            isTurboMode = (isTurboMode == 0);
+        }
+    }
+
+    if ((actorframeNo != playerActor->frameNo) && (setActorFrameNo(playerActor, actorframeNo), redrawRequired != 0)) {
+        drawWindow(mainWindowDC, &windowClientRect);
+        redrawRequired = 0;
+    }
 }
 
 // TODO not byte accurate
