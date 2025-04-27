@@ -15,7 +15,7 @@ Forked again from the Skifree SDL by jeff-1amstudios
 
 Forked from the decompiled skifree [skifree_decomp](https://github.com/yuv422/skifree_decomp) by Eric Fry
 
-![Untitled](https://github.com/jeff-1amstudios/skifree_sdl/assets/1063652/95b53385-4d16-4de5-8f9d-10a877fee6a9)
+![Image](https://github.com/user-attachments/assets/50e47f1b-4472-47d0-beb5-9f98bee83da7)
 
 ## Compiling for Nintendo Switch
 
